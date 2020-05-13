@@ -1,0 +1,307 @@
+
+#######################################################################################
+##-------------------------------Data Preparation------------------------------------##
+#######################################################################################
+
+# getwd()
+# setwd("C:\\Users\\mishr\\Google Drive\\NEU\\Quarter 5\\Predictive\\W6")
+# getwd()
+
+
+# loading data  
+wine1<-read.csv("winequality-red_new.csv", stringsAsFactors = TRUE)
+wine1
+
+#Check structure of data set
+str(wine1)
+
+#Changing data type of quality as factor 
+wine1$quality<-as.factor(wine1$quality)
+
+#Check for NA values
+sum(is.na(wine1))
+
+
+#####################################################################################
+##----------------------------------Random Forest----------------------------------##
+#####################################################################################
+
+library(randomForest)
+
+# Checking the target variable column
+table(wine1$quality)
+
+#Splitting our data into 70:30 ratio
+set.seed(1234)
+index <- sample(2, nrow(wine1), replace = T, prob = c(0.70,0.30))
+wineRf.train <- wine1[index==1, ]
+str(wineRf.train)
+wineRf.test <- wine1[index==2, ]
+
+#Implementing Random Forest
+set.seed(111)
+wine.rf2 <- randomForest(quality~.,data = wineRf.train, mtry=2, importance=TRUE, do.trace=100)
+print(wine.rf2)
+plot(wine.rf2)
+
+
+#Tuning parameters to improve accuracy of Random Forest on  
+set.seed(222)
+wine.rf3 <- randomForest(quality~.,data = wineRf.train, mtry=3, importance=TRUE, do.trace=100, ntree = 290)
+print(wine.rf3)
+plot(wine.rf3)
+
+
+#Plotting Importance plot
+importance(wine.rf3)
+
+
+#Making Predicitons
+library(caret)
+wineRf.predicted <- predict(wine.rf3, wineRf.test)
+head(wineRf.predicted,20)
+
+#getting actual values
+head(wineRf.train$quality, 20)
+
+# Looking at actual values and predicted values side by side
+winrRf.predTable <- cbind(c(head(wineRf.predicted,10)),c(head(wineRf.train$quality, 10)))
+
+#Confusion matrix for train data
+confusionMatrix(wineRf.predicted, wineRf.test$quality)
+
+
+
+#Random forest model
+set.seed(17)
+wine.rf<-randomForest(quality~.,data = wine1, mtry=2, importance=TRUE, do.trace=100)
+
+print(wine.rf)
+
+#Model Comparison by comaring errors.
+library(ipred)
+set.seed(131)
+errorwine.rf<-numeric(10)
+for(i in 1:10) errorwine.rf[i]<-
+  errorest(quality~.,data = wine1, mtry=2,model=randomForest)$error
+
+#Print summary of random forest error
+summary(errorwine.rf)
+
+#Support vector machine
+library(e1071)
+set.seed(563)
+errorwine.svm<-numeric(10)
+for(i in 1:10) errorwine.svm[i]<-
+  errorest(quality~.,data = wine1, mtry=2,model=svm)$error
+
+#Print summary of SVM error
+summary(errorwine.svm)  
+
+#Plot the graph
+par(mfrow=c(2,2))
+for(i in 1:4){
+  plot(sort(wine.rf$importance[,i],dec=TRUE),type="h", main=paste("Measure",i),xaxt = 'n',ylab = 'values')
+  axis(side = 1,at = seq(1,11,by=1), labels = colnames(wine1)[-12])
+}
+
+
+# Variable Importance Plot
+varImpPlot(wine.rf3)
+
+
+#####################################################################################
+##--------------------------------------- KNN -------------------------------------##
+#####################################################################################
+
+
+# Create normalization function
+normalize <- function(x) {
+    return ((x - min(x)) / (max(x) - min(x)))
+  }
+
+# test normalization function - result should be identical
+normalize(c(1, 2, 3, 4, 5))
+normalize(c(10, 20, 30, 40, 50))
+
+# normalize the wbcd data
+wine_n <- as.data.frame(lapply(wine1[1:11], normalize))
+
+# confirm that normalization worked
+summary(wine_n$fixed.acidity)
+
+set.seed(12345)
+wine_rand <- wine_n[order(runif(1599)), ]
+
+
+# create training and test data
+wine_train <- wine_n[1:1119, ]
+wine_test <- wine_n[1120:1599, ]
+
+# create labels for training and test data
+wine_train_labels <- wine1[1:1119, 12]
+wine_test_labels <- wine1[1120:1599, 12]
+
+## Step 3: Training a model on the data ----
+
+# load the "class" library
+#install.packages("class")
+library(class)
+
+wine_test_pred <- knn(train = wine_train, test = wine_test,
+                       cl = wine_train_labels, k=33)
+wine_test_pred
+
+## Step 4: Evaluating model performance ----
+
+# load the "gmodels" library
+#install.packages("gmodels")
+library(gmodels)
+
+# Create the cross tabulation of predicted vs. actual
+CrossTable(x = wine_test_labels, y = wine_test_pred,
+           prop.chisq=FALSE)
+
+## Step 5: Improving model performance ----
+
+# use the scale() function to z-score standardize a data frame
+wine_z <- as.data.frame(scale(wine1[-12]))
+
+# confirm that the transformation was applied correctly
+summary(wine_z$fixed.acidity)
+
+# create training and test datasets
+wine_train1 <- wine_z[1:1119, ]
+wine_test1 <- wine_z[1120:1599, ]
+
+# re-classify test cases
+wine_test_pred1 <- knn(train = wine_train1, test = wine_test1,
+                        cl = wine_train_labels, k=33)
+
+# Create the cross tabulation of predicted vs. actual
+CrossTable(x = wine_test_labels, y = wine_test_pred1,
+           prop.chisq=FALSE)
+
+
+#####################################################################################
+##---------------------------------- Decision Tree --------------------------------##
+#####################################################################################
+
+#creating training and testing model
+set.seed(12345)
+wine_rand <- wine1[order(runif(1599)), ]
+
+summary(wine1$fixed.acidity)
+summary(wine_rand$fixed.acidity)
+
+#splitting data into train and split data
+wine_train_forest <- wine_rand[1:1119, ]
+wine_test_forest <- wine_rand[1120:1599, ]
+
+#check for quality
+prop.table(table(wine_train_forest$quality))
+prop.table(table(wine_test_forest$quality))
+
+library(C50)
+wine_model<-C5.0(wine_train_forest[-12],factor(wine_train_forest$quality))
+wine_model
+
+#let's see the decisions
+summary(wine_model)
+
+#Evaluating model performace
+wine_pred <- predict(wine_model, wine_test_forest)
+
+#creating confusion matrix
+library(gmodels)
+CrossTable(wine_test_forest$quality, wine_pred,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('actual quality', 'predicted quality'))
+
+#improving model performance
+wine_boost10 <- C5.0(wine_train_forest[-12], factor(wine_train_forest$quality),
+                       trials = 10)
+wine_boost10
+
+#let's look at performance of training model
+summary(wine_boost10)
+
+#evaluating model
+wine_boost_pred10 <- predict(wine_boost10, wine_test_forest)
+
+#creating confusion matrix
+CrossTable(wine_test_forest$quality, wine_boost_pred10, prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE, dnn = c('actual quality', 'predicted quality'))
+#####################################################################################
+##---------------------------------- Decision Rules -------------------------------##
+#####################################################################################
+
+#Step 3 - training a model on the data
+#install.packages("RWeka")
+library(RWeka)
+#install.packages("rJava")
+library(rJava)
+#install.packages("OneR")
+library(OneR)
+library(partykit)
+wine1_1R <- OneR(quality ~ ., data = wine1)
+wine1_1R
+
+wine1_ctree <- ctree(density ~ quality, data = wine1)
+wine1_ctree
+plot(wine1_ctree)
+#Step 4 - evaluating model performance
+summary(wine1_1R)
+#Step 5 - improving model performance
+wine1_JRip <- JRip(quality ~ ., data = wine1)
+wine1_JRip
+
+wine1_ctreeall <- ctree(quality ~ density + alcohol , data = wine1)
+plot(wine1_ctreeall)
+
+#####################################################################################
+##------------------------------ GLM: Logistic Model ------------------------------##
+#####################################################################################
+
+# build logit model and predict
+library(dplyr)
+
+#wine1<-read.csv("winequality-red_new.csv", stringsAsFactors = TRUE)
+#wine1
+
+glm_wine_train<-wine1[1:1119, ]
+glm_wine_test<-wine1[1120:1599,]
+
+
+logitModwine <- glm(quality ~. , data=glm_wine_train, family=binomial(link="logit"))
+
+predicted_wine <- predict(logitModwine, glm_wine_test, type="response")  # predicted scores
+
+
+#Decide on optimal prediction probability cutoff for the model
+library(InformationValue)
+optimalCutOff_wine <- optimalCutoff(glm_wine_test$quality, predicted_wine) 
+
+#Model Diagnostics
+summary(logitModwine)
+
+#Check for multicolinearity
+library(car)
+vif(logitModwine)
+
+#Misclassification Error
+misClassError(glm_wine_test$quality, predicted_wine, threshold = optimalCutOff_wine)
+
+#Receiver Operating Characteristics Curve
+plotROC(glm_wine_test$quality, predicted_wine)
+
+#Concordance
+Concordance(glm_wine_test$quality, predicted_wine)
+
+# Sensitivity
+sensitivity(glm_wine_test$quality, predicted_wine, threshold = optimalCutOff_wine)
+
+#Specificity
+specificity(glm_wine_test$quality, predicted_wine, threshold = optimalCutOff_wine)
+
+#Confusion Matrix
+confusionMatrix(glm_wine_test$quality, predicted_wine, threshold = optimalCutOff_wine)
